@@ -24,11 +24,49 @@ conn = pg.connect(host=auth_class.login.host,
 def main():
     global conn
 
-    temper(conn)
+    # quick little bit of deletion to test the script
+    #cursor = conn.cursor()
+    #sql = 'DELETE FROM intersecttest'
+    #cursor.execute(sql)
+    #conn.commit()
 
+
+
+    datelist = []
+    datelist = datefinder(conn)
+    print(datelist)
+
+
+
+    # not going to loop through dates yet while i'm testing
+    temper(conn) # might not even need this and do away with the temp table?? --> might be useful to keep for testing, though.
+
+    temp_inserter(conn)
+
+    intersector(conn)
+
+    # commit changes to the database --> changes are not saved before then
     conn.commit()
 
+    # probably don't need this but this closes out the cursor (and saves changes)- probably just good practice
     conn.close()
+
+def intersector(conn):
+    cursor = conn.cursor()
+
+    sql = ''
+
+    cursor.execute(sql)
+
+    print(cursor.fetchall())
+
+def the_intersector(conn):
+    # moves the selected data from the main database into the temp database
+    cursor = conn.cursor()
+
+    sql = 'INSERT INTO ' + auth_class.login.tempDb + ' SELECT * FROM ' + auth_class.login.inputDb
+
+    cursor.execute(sql)
 
 def temper(conn):
     # this functionality checks if a temp folder already exists and drops the existing one if it does -- regardless the script will create a blank temp folder
@@ -52,29 +90,46 @@ def temper(conn):
     # create temp table in database
     cursor = conn.cursor()
     sql =   ('CREATE TABLE ' + auth_class.login.tempDb + ' ' +
-            '(segmentId BIGINT PRIMARY KEY,' +
+            '(newid BIGINT,' +
+            'segmentId BIGINT,' +
             'uid BIGINT NOT NULL,' +
             'mmsi INT NOT NULL,' +
             'startTime TIMESTAMP WITHOUT TIME ZONE NOT NULL,' +
             'duration INT NOT NULL,' +
-            'startLat FLOAT NOT NULL,' +
-            'startLon FLOAT NOT NULL,' +
-            'endLat FLOAT NOT NULL,' +
-            'endLon FLOAT NOT NULL,' +
             'isClassA BOOL NOT NULL,' +
             'classAIS SMALLINT NOT NULL,' +
             'classGen SMALLINT NOT NULL,' +
             'name VARCHAR(20),' +
             'isUnique BOOL NOT NULL,' +
             'lastChange TIMESTAMP WITHOUT TIME ZONE NOT NULL,' +
-            'geom GEOMETRY (LineString, 4326),' +
             'lenM FLOAT,' +
             'sogKt FLOAT,' +
-            'gridid INT,' +
-            'newlen FLOAT,' +
-            'propelap FLOAT)')
+            'inter GEOMETRY(LineString,3005),'
+            'gridid INT)'
+             )
 
     cursor.execute(sql)
+
+
+def datefinder(conn):
+    # select dates that occur within the segments being worked on. This keeps the temp smaller and compartmentalizes the work a little bit
+    cursor = conn.cursor()
+    # sql = "SELECT starttime FROM " + auth_class.login.inputDb + " WHERE segmentid IN ({})".format(str(segList)[1:-1])
+    sql = "SELECT starttime FROM " + auth_class.login.inputDb
+    cursor.execute(sql)
+    result = cursor.fetchall()
+
+    # loop to convert datetime to date in a list
+    datelist = []
+    x = 0
+    for i in result:
+        datelist.append(result[x][0].strftime("'%Y-%m-%d'"))
+        x += 1
+
+    # only keeps unique dates to prevent unnecessary loops
+    datelist = set(datelist)
+
+    return datelist
 
 
 if __name__ == ('__main__'):
