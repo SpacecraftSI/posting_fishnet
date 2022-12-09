@@ -30,20 +30,15 @@ def main():
     #cursor.execute(sql)
     #conn.commit()
 
-
-
     datelist = []
     datelist = datefinder(conn)
     print(datelist)
 
-
-
     # not going to loop through dates yet while i'm testing
     temper(conn) # might not even need this and do away with the temp table?? --> might be useful to keep for testing, though.
 
-    temp_inserter(conn)
+    the_intersector(conn)
 
-    intersector(conn)
 
     # commit changes to the database --> changes are not saved before then
     conn.commit()
@@ -51,22 +46,18 @@ def main():
     # probably don't need this but this closes out the cursor (and saves changes)- probably just good practice
     conn.close()
 
-def intersector(conn):
-    cursor = conn.cursor()
-
-    sql = ''
-
-    cursor.execute(sql)
-
-    print(cursor.fetchall())
-
 def the_intersector(conn):
     # moves the selected data from the main database into the temp database
     cursor = conn.cursor()
 
-    sql = 'INSERT INTO ' + auth_class.login.tempDb + ' SELECT * FROM ' + auth_class.login.inputDb
+    sql = (
+    'INSERT INTO ' + auth_class.login.tempDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, gridid) ' +
+    'SELECT l.segmentid, l.uid, l.mmsi, l.starttime, l.duration, l.isclassa, l.classais, l.classgen, l.name, l.isunique, l.lastchange, l.lenm, l.sogkt, ST_INTERSECTION(l.geom, c.geom) as inter, c.gridid ' +
+    'FROM ' + auth_class.login.inputDb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom)'
+    )
 
     cursor.execute(sql)
+
 
 def temper(conn):
     # this functionality checks if a temp folder already exists and drops the existing one if it does -- regardless the script will create a blank temp folder
