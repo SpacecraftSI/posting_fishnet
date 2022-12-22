@@ -24,6 +24,8 @@ conn = pg.connect(host=auth_class.login.host,
 def main():
     global conn
 
+    start_time = datetime.now()
+
     # quick little bit of deletion to test the script
     #cursor = conn.cursor()
     #sql = 'DELETE FROM intersecttest'
@@ -39,6 +41,8 @@ def main():
 
     the_intersector(conn)
 
+    len_sog(conn)
+
 
     # commit changes to the database --> changes are not saved before then
     conn.commit()
@@ -46,16 +50,36 @@ def main():
     # probably don't need this but this closes out the cursor (and saves changes)- probably just good practice
     conn.close()
 
+    now = datetime.now()
+    duration = (now - start_time)
+
+    print(duration)
+
 def the_intersector(conn):
     # moves the selected data from the main database into the temp database
     cursor = conn.cursor()
 
     sql = (
-    'INSERT INTO ' + auth_class.login.tempDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, gridid) ' +
-    'SELECT l.segmentid, l.uid, l.mmsi, l.starttime, l.duration, l.isclassa, l.classais, l.classgen, l.name, l.isunique, l.lastchange, l.lenm, l.sogkt, ST_INTERSECTION(l.geom, c.geom) as inter, c.gridid ' +
+    'INSERT INTO ' + auth_class.login.tempDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, id500m, id1km, id2km, id4km, id8km) ' +
+    'SELECT l.segmentid, l.uid, l.mmsi, l.starttime, l.duration, l.isclassa, l.classais, l.classgen, l.name, l.isunique, l.lastchange, l.lenm, l.sogkt, ' +
+    'ST_INTERSECTION(l.geom, c.geom) AS inter, c.id_500m AS id500m, c.id_1km AS id1km, c.id_2km as id2km, c.id_4km as id4km, c.id_8km as id8km ' +
     'FROM ' + auth_class.login.inputDb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom)'
     )
 
+    cursor.execute(sql)
+
+def len_sog(conn):
+    # recalculates the length of each segment (now that some are cut) and recalculates the duration accordingly based on sog and length
+    cursor = conn.cursor()
+
+    # recalculates the length--> a couple things to note. This calculates CARTESIAN by default AND the units based on the srid (currently 3005).
+    # use: ST_Distance_Sphere to calculate spherical if desired
+    sql = 'UPDATE ' + auth_class.login.tempDb + ' SET lenm = ST_LENGTH(inter)'
+    cursor.execute(sql)
+
+    # recalculates the duration of the segment based on the newly calculated length and the originally calculated speed over ground
+    # the equation for this is: lenm [length in meters] / (sog[kts]*0.514) = duration [in seconds]
+    sql = 'UPDATE ' + auth_class.login.tempDb + ' SET duration = (lenm / (sogkt*0.514))'
     cursor.execute(sql)
 
 
@@ -95,8 +119,12 @@ def temper(conn):
             'lastChange TIMESTAMP WITHOUT TIME ZONE NOT NULL,' +
             'lenM FLOAT,' +
             'sogKt FLOAT,' +
-            'inter GEOMETRY(LineString,3005),'
-            'gridid INT)'
+            'inter GEOMETRY(LineString,3005),' +
+            'id500m VARCHAR(50),' +
+            'id1km VARCHAR(50),' +
+            'id2km VARCHAR(50),' +
+            'id4km VARCHAR(50),' +
+            'id8km VARCHAR(50))'
              )
 
     cursor.execute(sql)
