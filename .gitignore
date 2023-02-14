@@ -1,5 +1,6 @@
 # SQL Cheat Sheet
 sql_cheat_sheet.sql
+auth_class.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
