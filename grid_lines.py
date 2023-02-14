@@ -43,9 +43,13 @@ def main():
 
     len_sog(conn)
 
+    # select duplicate row id's and make a sub-id with decimal
+    id_creator(conn)
 
-    # commit changes to the database --> changes are not saved before then
     conn.commit()
+
+    # STILL NEED TO DUMP TEMP INTO FINAL TABLE
+
 
     # probably don't need this but this closes out the cursor (and saves changes)- probably just good practice
     conn.close()
@@ -60,9 +64,9 @@ def the_intersector(conn):
     cursor = conn.cursor()
 
     sql = (
-    'INSERT INTO ' + auth_class.login.tempDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, id500m, id1km, id2km, id4km, id8km) ' +
+    'INSERT INTO ' + auth_class.login.tempDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, id1km, id2km, id4km, id8km) ' +
     'SELECT l.segmentid, l.uid, l.mmsi, l.starttime, l.duration, l.isclassa, l.classais, l.classgen, l.name, l.isunique, l.lastchange, l.lenm, l.sogkt, ' +
-    'ST_INTERSECTION(l.geom, c.geom) AS inter, c.id_500m AS id500m, c.id_1km AS id1km, c.id_2km as id2km, c.id_4km as id4km, c.id_8km as id8km ' +
+    'ST_INTERSECTION(l.geom, c.geom) AS inter, c.id_1km AS id1km, c.id_2km as id2km, c.id_4km as id4km, c.id_8km as id8km ' +
     'FROM ' + auth_class.login.inputDb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom)'
     )
 
@@ -105,7 +109,7 @@ def temper(conn):
     # create temp table in database
     cursor = conn.cursor()
     sql =   ('CREATE TABLE ' + auth_class.login.tempDb + ' ' +
-            '(newid BIGINT,' +
+            '(newid VARCHAR(50),' +
             'segmentId BIGINT,' +
             'uid BIGINT NOT NULL,' +
             'mmsi INT NOT NULL,' +
@@ -120,7 +124,6 @@ def temper(conn):
             'lenM FLOAT,' +
             'sogKt FLOAT,' +
             'inter GEOMETRY(LineString,3005),' +
-            'id500m VARCHAR(50),' +
             'id1km VARCHAR(50),' +
             'id2km VARCHAR(50),' +
             'id4km VARCHAR(50),' +
@@ -150,6 +153,11 @@ def datefinder(conn):
 
     return datelist
 
+def id_creator(conn):
+    # this function adds the associated cwsid1km (smallest resolution) to the segment id which will result in a totally unique id. Downside is that it is varchar.. so might be worth redoing this later.
+    cursor = conn.cursor()
+    sql = "UPDATE " + auth_class.login.tempDb + " SET newid = (segmentid || id1km)"
+    cursor.execute(sql)
 
 if __name__ == ('__main__'):
     main()
