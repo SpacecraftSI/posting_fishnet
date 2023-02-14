@@ -3,18 +3,19 @@
 
 class login:
     # Postgresql/Postgis database login details
-    db = 'database'
+    db = 'eccc-data'
     host = 'localhost'
     port = '5432'
     schem = 'public'
 
-    user = 'user'
-    pw = 'password'
+    user = 'postgres'
+    pw = 'postgres'
 
-    inputDb = 'inputTable'
-    outputDb = 'outputTable' #currently redundant as script uses inputDb for output
+    inputDb = 'gregmentsv2'
+    outputDb = 'cwsgridais'
+    gridDb = 'cwspacificgrid1km'
+
+
 
     tempDb = 'temp'
 
-    # loading csv into test database
-    loaderDb = 'loaderDb'
