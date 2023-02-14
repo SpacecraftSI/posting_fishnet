@@ -12,10 +12,8 @@ class login:
     host = 'host'
     port = '1234'
     schem = 'public'
-
     user = 'user'
     pw = 'password'
-
     inputDb = 'inputtable'
     outputDb = 'outputtable'
     gridDb = 'polygon to insersect by'
