@@ -38,7 +38,7 @@ def main():
     len_sog(conn)
 
     # select duplicate row id's and make a sub-id with decimal
-    id_creator(conn)
+    data_caboose(conn)
 
     # STILL NEED TO DUMP TEMP INTO FINAL TABLE
     data_finalizer(conn)
@@ -147,12 +147,11 @@ def datefinder(conn):
     return datelist
 
 
-def id_creator(conn):
+def data_caboose(conn):
     # this function adds the associated cwsid1km (smallest resolution) to the segment id which will result in a totally unique id. Downside is that it is varchar.. so might be worth redoing this later.
     cursor = conn.cursor()
     sql = "UPDATE " + auth_class.login.tempDb + " SET newid = (segmentid || id1km)"
     cursor.execute(sql)
-
 
 def data_finalizer(conn):
     cursor = conn.cursor()
