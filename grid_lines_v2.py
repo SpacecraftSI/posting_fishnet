@@ -3,6 +3,13 @@
 # to do this it also recalculates the speed and duration (based of proportion of line)
 # this is stealing from filterer as that methodology seems to do better
 
+# remember to double check the # filters section to see there's appropriate filters
+
+# *** Note *** Because I forgot this when I came back to it..
+# the basic 'gridjoin = False' config for this scripts keeps the lines 'as-is' just breaks them at the grid points.
+# when 'gridjoin = True' then it actually aggregates them by grid cell BUT ALSO keeps the broken lines.
+# might be worth adding a mode that doesn't keep the lines because that might just create unnecessary clutter in certain circumstances.
+
 from datetime import datetime
 import psycopg2 as pg
 
@@ -35,25 +42,27 @@ def main():
     start_time = datetime.now()
     print("Creating: " + auth_class.login.outputDb)
 
-
     output_table()
     the_filter()
     the_intersector()
     length_calc()
     unique_id()
 
+    conn.commit()
+
     if gridjoin == True:
+        # this is for if we want to aggregate by grid square as an additional step to creating the 'gridded lines'
+        # maybe move this to it's own program that can be called instead?
         print("Creating: " + outgrid)
         aisclass = grid_table()
         grid_join(aisclass)
 
-
     conn.commit()
-
 
     now = datetime.now()
     duration = (now - start_time)
     print("Completed in: " + str(duration))
+
 
 def grid_join(aisclass):
     cursor = conn.cursor()
@@ -67,16 +76,15 @@ def grid_join(aisclass):
                 "WHERE newtab.classgen = " + str(ais) + " AND newtab.id_1km = "+outgrid+".id_1km")
         cursor.execute(sql)
 
-######### NOT WORKING ################
-    sql = "UPDATE " + outgrid + " SET countagg = (count0+count1+count2+count3+count4+count5+count6+count7+count8)"
+    # aggregates for the total vessel class columns- note average is a seperate query as to not average the average
+    sql = "UPDATE " + outgrid + " SET countagg = count0 + count1 + count2 + count3 + count4 + count5 + count6 + count7 + count8"
     cursor.execute(sql)
-    sql = "UPDATE " + outgrid + " SET lenagg = (len0+len1+len2+len3+len4+len5+len6+len7+len8)"
+    sql = "UPDATE " + outgrid + " SET lenagg = len0 + len1 + len2 + len3 + len4 + len5 + len6 + len7 + len8"
     cursor.execute(sql)
-    sql = "UPDATE " + outgrid + " SET elapagg = (elap0+elap1+elap2+elap3+elap4+elap5+elap6+elap7+elap8)"
+    sql = "UPDATE " + outgrid + " SET elapagg =  elap0 + elap1 + elap2 + elap3 + elap4 + elap5 + elap6 + elap7 + elap8"
     cursor.execute(sql)
 
-
-### THIS CAN BE SIMPLIFIED -- ALSO NOT WORKING ##
+    # this is working but might be able to be simplified- it collects averages irrespective of class
     sql = ("UPDATE " + outgrid + " SET avgagg = newtab.avg FROM " +
             "(SELECT grid.id_1km, AVG(ves.sogkt) as avg " +
             "FROM " + outgrid + " AS grid " +
@@ -88,6 +96,7 @@ def grid_join(aisclass):
 
 
 def grid_table():
+    # fills out the grid table with required many columsn 4 x 9
     cursor = conn.cursor()
     sql = 'DROP TABLE IF EXISTS ' + outgrid
     cursor.execute(sql)
@@ -98,11 +107,22 @@ def grid_table():
     aisclass = (0,1,2,3,4,5,6,7,8)
     columnnames = [['count', 'INT'], ['len','FLOAT'],['elap','FLOAT'], ['avg', 'FLOAT']]
     for columns in columnnames:
-        sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0] + "agg " + columns[1]
-        cursor.execute(sql)
-        for ais in aisclass:
-            sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0]+str(ais) + " " + columns[1]
+        # the if/else statement here ensures that averages don't default to zero, but rather null. As zero would be misleading if there are no vessels.
+        if columns[0] == 'avg':
+            sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0] + "agg " + columns[1]
             cursor.execute(sql)
+        else:
+            # it's important that the default is set to null otherwise aggregation doesn't work properly with null values
+            sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0] + "agg " + columns[1] + " DEFAULT 0"
+            cursor.execute(sql)
+
+        for ais in aisclass:
+            if columns[0] == 'avg':
+                sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0] + str(ais) + " " + columns[1]
+                cursor.execute(sql)
+            else:
+                sql = "ALTER TABLE " + outgrid + " ADD COLUMN " + columns[0]+str(ais) + " " + columns[1] + " DEFAULT 0"
+                cursor.execute(sql)
     return aisclass
 
 
@@ -111,6 +131,7 @@ def unique_id():
     cursor = conn.cursor()
     sql = "UPDATE " + auth_class.login.outputDb + " SET newid = (segmentid || id1km)"
     cursor.execute(sql)
+
 
 def length_calc():
     # recalculates the length of each segment (now that some are cut) and recalculates the duration accordingly based on sog and length
@@ -127,6 +148,7 @@ def length_calc():
 
     cursor.execute(sql)
 
+
 def the_intersector():
     cursor = conn.cursor()
     sql = (
@@ -136,6 +158,7 @@ def the_intersector():
     'FROM ' + auth_class.login.tempDb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom) ON CONFLICT (newid) DO NOTHING')
 
     cursor.execute(sql)
+
 
 def the_filter():
     cursor = conn.cursor()
@@ -161,6 +184,11 @@ def the_filter():
     sql = ("DELETE FROM "+auth_class.login.tempDb+" USING tempsland WHERE "+auth_class.login.tempDb+".segmentid = tempsland.segmentid")
     cursor.execute(sql)
 
+    sql = "ALTER TABLE " +auth_class.login.tempDb+" ALTER COLUMN geom SET DATA TYPE geometry"
+    cursor.execute(sql)
+    sql = "ALTER TABLE " + auth_class.login.outputDb + " ALTER COLUMN inter SET DATA TYPE geometry"
+    cursor.execute(sql)
+
 
 def output_table():
     #drops output table if the name already exists
@@ -170,7 +198,7 @@ def output_table():
     # creates new output table
     sql = ('CREATE TABLE ' + auth_class.login.outputDb +
            ' (newid VARCHAR(50),' +
-           'segmentId BIGINT,' +
+           'segmentId VARCHAR(50),' +
            'uid BIGINT NOT NULL,' +
            'mmsi INT NOT NULL,' +
            'startTime TIMESTAMP WITHOUT TIME ZONE NOT NULL,' +
@@ -183,7 +211,7 @@ def output_table():
            'lastChange TIMESTAMP WITHOUT TIME ZONE NOT NULL,' +
            'lenM FLOAT,' +
            'sogKt FLOAT,' +
-           'inter GEOMETRY(LineString,3005),' +
+           'inter GEOMETRY(MultilineString,3005),' +
            'id1km VARCHAR(50),' +
            'id2km VARCHAR(50),' +
            'id4km VARCHAR(50),' +
@@ -191,6 +219,7 @@ def output_table():
            'UNIQUE(newid))'
            )
     cursor.execute(sql)
+
 
 if __name__ == ('__main__'):
     main()
