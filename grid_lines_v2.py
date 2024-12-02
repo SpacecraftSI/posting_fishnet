@@ -37,6 +37,8 @@ landshape = "akbcwaor"
 gridjoin = True
 outgrid = ((auth_class.login.outputDb)+"gridagg")
 
+tempdb = ((auth_class.login.inputDb)+"temp")
+
 
 def main():
     start_time = datetime.now()
@@ -58,6 +60,11 @@ def main():
         grid_join(aisclass)
 
     conn.commit()
+
+    cursor = conn.cursor()
+    sql = 'DROP TABLE IF EXISTS ' + tempdb
+    cursor.execute(sql)
+
 
     now = datetime.now()
     duration = (now - start_time)
@@ -155,7 +162,7 @@ def the_intersector():
     'INSERT INTO ' + auth_class.login.outputDb + '(segmentid, uid, mmsi, starttime, duration, isclassa, classais, classgen, name, isunique, lastchange, lenm, sogkt, inter, id1km, id2km, id4km, id8km) ' +
     'SELECT l.segmentid, l.uid, l.mmsi, l.starttime, l.duration, l.isclassa, l.classais, l.classgen, l.name, l.isunique, l.lastchange, l.lenm, l.sogkt, ' +
     'ST_INTERSECTION(l.geom, c.geom) AS inter, c.id_1km AS id1km, c.id_2km as id2km, c.id_4km as id4km, c.id_8km as id8km ' +
-    'FROM ' + auth_class.login.tempDb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom) ON CONFLICT (newid) DO NOTHING')
+    'FROM ' + tempdb + ' AS l, ' + auth_class.login.gridDb + ' AS c WHERE ST_INTERSECTS(l.geom, c.geom) ON CONFLICT (newid) DO NOTHING')
 
     cursor.execute(sql)
 
@@ -163,28 +170,28 @@ def the_intersector():
 def the_filter():
     cursor = conn.cursor()
     # drops existing temporary table
-    sql = 'DROP TABLE IF EXISTS ' + auth_class.login.tempDb
+    sql = 'DROP TABLE IF EXISTS ' + tempdb
     cursor.execute(sql)
 
     # moves filtered data into a temporary table
-    sql = ("SELECT * INTO "+auth_class.login.tempDb+" FROM " + auth_class.login.inputDb + " WHERE sogkt < " + str(sog) + " AND lenm < " + str(length) + " AND duration < " + str(duration) + " AND duration > 0")
+    sql = ("SELECT * INTO "+tempdb+" FROM " + auth_class.login.inputDb + " WHERE sogkt < " + str(sog) + " AND lenm < " + str(length) + " AND duration < " + str(duration) + " AND duration > 0")
     cursor.execute(sql)
 
     # creates index --> it's a relatively light task and doing it every time just adds some bulletproofness
     sql = ('DROP INDEX IF EXISTS idx')
     cursor.execute(sql)
-    sql = ("CREATE INDEX idx ON "+auth_class.login.tempDb+" USING gist (geom)")
+    sql = ("CREATE INDEX idx ON "+tempdb+" USING gist (geom)")
     cursor.execute(sql)
 
     sql = "DROP TABLE IF EXISTS tempsland"
     cursor.execute(sql)
 
-    sql = ("SELECT a.segmentid INTO tempsland from "+auth_class.login.tempDb+" as a, "+landtable+" as b where st_intersects(a.geom,b.geom)")
+    sql = ("SELECT a.segmentid INTO tempsland from "+tempdb+" as a, "+landtable+" as b where st_intersects(a.geom,b.geom)")
     cursor.execute(sql)
-    sql = ("DELETE FROM "+auth_class.login.tempDb+" USING tempsland WHERE "+auth_class.login.tempDb+".segmentid = tempsland.segmentid")
+    sql = ("DELETE FROM "+tempdb+" USING tempsland WHERE "+tempdb+".segmentid = tempsland.segmentid")
     cursor.execute(sql)
 
-    sql = "ALTER TABLE " +auth_class.login.tempDb+" ALTER COLUMN geom SET DATA TYPE geometry"
+    sql = "ALTER TABLE " +tempdb+" ALTER COLUMN geom SET DATA TYPE geometry"
     cursor.execute(sql)
     sql = "ALTER TABLE " + auth_class.login.outputDb + " ALTER COLUMN inter SET DATA TYPE geometry"
     cursor.execute(sql)
